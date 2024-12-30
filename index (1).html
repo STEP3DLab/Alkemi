@@ -1,0 +1,60 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Отправка ссылки на оплату</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 50px;
+      text-align: center;
+    }
+    input {
+      width: 300px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Для отправки ссылки на оплату, введите номер заказа</h1>
+  <input type="text" id="orderInput" placeholder="Введите номер заказа" />
+  <br />
+  <button onclick="sendOrder()">Отправить</button>
+
+  <script>
+    function sendOrder() {
+      const orderId = document.getElementById('orderInput').value;
+      if (!orderId) {
+        alert('Введите номер заказа!');
+        return;
+      }
+      
+      const data = { order_id: orderId };
+      fetch('https://script.google.com/macros/s/AKfycbzs_8ueKBB33PHQrpqAWu5JF8oPuDO7nLCrgjs0lnxrmI2KaENAkcWRnTllNQQm5fZ3BQ/exec', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+      .then(response => response.json())
+      .then(result => {
+        alert('Данные успешно отправлены!');
+        console.log(result);
+      })
+      .catch(error => {
+        alert('Произошла ошибка при отправке данных.');
+        console.error(error);
+      });
+    }
+  </script>
+</body>
+</html>
