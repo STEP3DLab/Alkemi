@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -132,13 +132,13 @@
       <div class="col-md-2">
         <select id="filterStaff" class="form-select" aria-label="Filter by Staff">
           <option value="">All Staff</option>
-          <!-- Staff options -->
+          <!-- Staff options будут заполнены динамически -->
         </select>
       </div>
       <div class="col-md-2">
         <select id="filterService" class="form-select" aria-label="Filter by Service">
           <option value="">All Services</option>
-          <!-- Service options -->
+          <!-- Service options будут заполнены динамически -->
         </select>
       </div>
       <div class="col-md-2">
@@ -188,10 +188,95 @@
     </div>
   </div>
 
+  <!-- Модальное окно для синхронизации -->
+  <div class="modal fade" id="syncModal" tabindex="-1" aria-labelledby="syncModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body text-center">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Syncing...</span>
+          </div>
+          <p class="mt-3">Синхронизация данных...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно для редактирования (опционально) -->
+  <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editModalLabel">Edit Booking</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Форма редактирования -->
+          <form id="editForm">
+            <div class="mb-3">
+              <label for="editClientName" class="form-label">Client Name</label>
+              <input type="text" class="form-control" id="editClientName" required>
+            </div>
+            <div class="mb-3">
+              <label for="editService" class="form-label">Service</label>
+              <input type="text" class="form-control" id="editService" required>
+            </div>
+            <div class="mb-3">
+              <label for="editStaffMember" class="form-label">Staff Member</label>
+              <input type="text" class="form-control" id="editStaffMember" required>
+            </div>
+            <div class="mb-3">
+              <label for="editDate" class="form-label">Date</label>
+              <input type="date" class="form-control" id="editDate" required>
+            </div>
+            <div class="mb-3">
+              <label for="editTime" class="form-label">Time</label>
+              <input type="time" class="form-control" id="editTime" required>
+            </div>
+            <div class="mb-3">
+              <label for="editStatus" class="form-label">Status</label>
+              <select class="form-select" id="editStatus" required>
+                <option value="Pending">Pending</option>
+                <option value="Confirmed">Confirmed</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+            <input type="hidden" id="editRowIndex">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Идентификатор таблицы и листа
+    const sheetID = "1cru8OWkY9HtmLoaBrZSDcVQWTVZl9GtkJTQY4pPhtOs"; 
+    const gid = "901335254"; 
+
+    let bookingsData = []; // Для хранения данных из таблицы
+
+    // Функция для отображения уведомлений (тосты)
+    function showToast(message, type = 'success') {
+      const toastId = `toast${Date.now()}`;
+      const toastHTML = `
+        <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">
+              ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>
+      `;
+      document.getElementById('toastContainer').insertAdjacentHTML('beforeend', toastHTML);
+      const toastElement = new bootstrap.Toast(document.getElementById(toastId));
+      toastElement.show();
+    }
+
+    // Функция для получения данных из Google Sheets
     async function fetchSheetData() {
-      const sheetID = "2PACX-1vTiQgpm50571_rRwxWrqydaYDqGiJ8LikHN7--oXVWwuP4JckB36amRNjGff2T6pD_43i2IZSNShvPV";
-      const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json`;
+      const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&gid=${gid}`;
 
       try {
         const response = await fetch(url);
@@ -205,19 +290,25 @@
         const data = JSON.parse(jsonString);
 
         processSheetData(data);
+        populateFilters();
+        showToast('Data synchronized successfully!');
       } catch (error) {
         console.error('Error fetching sheet data:', error);
-        displayErrorMessage(error.message);
+        showToast(`Error: ${error.message}`, 'danger');
       }
     }
 
+    // Функция для обработки полученных данных
     function processSheetData(data) {
       const rows = data.table.rows;
       const tbody = document.querySelector('#bookingsTable tbody');
       tbody.innerHTML = ''; // Очистка таблицы перед заполнением новыми данными
+      bookingsData = []; // Сброс старых данных
 
       rows.forEach((row, index) => {
         const rowData = row.c.map(cell => cell ? cell.v : "");
+        bookingsData.push(rowData); // Сохранение данных для фильтрации
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${index + 1}</td>
@@ -228,7 +319,100 @@
           <td>${rowData[5] || ''}</td>
           <td>${rowData[6] || ''}</td>
           <td>
-            <button class="btn btn-sm btn-secondary edit-btn">
+            <button class="btn btn-sm btn-secondary edit-btn" data-index="${index}">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      if (rows.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center">No data available.</td>
+          </tr>
+        `;
+      }
+    }
+
+    // Функция для заполнения фильтров уникальными значениями
+    function populateFilters() {
+      const staffSet = new Set();
+      const serviceSet = new Set();
+
+      bookingsData.forEach(row => {
+        if (row[3]) staffSet.add(row[3]);
+        if (row[2]) serviceSet.add(row[2]);
+      });
+
+      const filterStaff = document.getElementById('filterStaff');
+      const filterService = document.getElementById('filterService');
+
+      // Очистка текущих опций кроме первой
+      filterStaff.innerHTML = '<option value="">All Staff</option>';
+      filterService.innerHTML = '<option value="">All Services</option>';
+
+      staffSet.forEach(staff => {
+        const option = document.createElement('option');
+        option.value = staff;
+        option.textContent = staff;
+        filterStaff.appendChild(option);
+      });
+
+      serviceSet.forEach(service => {
+        const option = document.createElement('option');
+        option.value = service;
+        option.textContent = service;
+        filterService.appendChild(option);
+      });
+    }
+
+    // Функция для применения фильтров
+    function applyFilters() {
+      const searchInput = document.getElementById('searchInput').value.toLowerCase();
+      const filterStaff = document.getElementById('filterStaff').value;
+      const filterService = document.getElementById('filterService').value;
+      const filterDate = document.getElementById('filterDate').value;
+
+      const tbody = document.querySelector('#bookingsTable tbody');
+      tbody.innerHTML = ''; // Очистка таблицы перед заполнением
+
+      const filteredData = bookingsData.filter(row => {
+        const clientName = row[1] ? row[1].toLowerCase() : '';
+        const service = row[2] ? row[2].toLowerCase() : '';
+        const staff = row[3] ? row[3].toLowerCase() : '';
+        const date = row[4] ? row[4] : '';
+
+        const matchesSearch = clientName.includes(searchInput) || service.includes(searchInput) || staff.includes(searchInput);
+        const matchesStaff = filterStaff === '' || row[3] === filterStaff;
+        const matchesService = filterService === '' || row[2] === filterService;
+        const matchesDate = filterDate === '' || row[4] === filterDate;
+
+        return matchesSearch && matchesStaff && matchesService && matchesDate;
+      });
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center">No matching records found.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      filteredData.forEach((rowData, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${rowData[1] || ''}</td>
+          <td>${rowData[2] || ''}</td>
+          <td>${rowData[3] || ''}</td>
+          <td>${rowData[4] || ''}</td>
+          <td>${rowData[5] || ''}</td>
+          <td>${rowData[6] || ''}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary edit-btn" data-index="${bookingsData.indexOf(rowData)}">
               <i class="fas fa-edit"></i> Edit
             </button>
           </td>
@@ -237,24 +421,78 @@
       });
     }
 
+    // Функция для синхронизации данных
     async function syncData() {
-      const modal = new bootstrap.Modal(document.getElementById('syncModal'));
-      modal.show();
-      try {
-        await fetchSheetData();
-        document.getElementById('loadingRow').classList.add('d-none');
-      } catch (error) {
-        console.error('Error syncing data:', error);
-      } finally {
-        modal.hide();
-      }
+      const syncModal = new bootstrap.Modal(document.getElementById('syncModal'));
+      syncModal.show();
+      await fetchSheetData();
+      syncModal.hide();
     }
 
-    function displayErrorMessage(message) {
-      alert(`Error: ${message}`);
+    // Обработчик клика на кнопку "Edit"
+    document.addEventListener('click', function(event) {
+      if (event.target.closest('.edit-btn')) {
+        const button = event.target.closest('.edit-btn');
+        const index = button.getAttribute('data-index');
+        openEditModal(index);
+      }
+    });
+
+    // Функция для открытия модального окна редактирования
+    function openEditModal(index) {
+      const rowData = bookingsData[index];
+      if (!rowData) {
+        showToast('Invalid row data.', 'danger');
+        return;
+      }
+
+      document.getElementById('editClientName').value = rowData[1] || '';
+      document.getElementById('editService').value = rowData[2] || '';
+      document.getElementById('editStaffMember').value = rowData[3] || '';
+      document.getElementById('editDate').value = rowData[4] || '';
+      document.getElementById('editTime').value = rowData[5] || '';
+      document.getElementById('editStatus').value = rowData[6] || 'Pending';
+      document.getElementById('editRowIndex').value = index;
+
+      const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+      editModal.show();
     }
+
+    // Обработчик формы редактирования
+    document.getElementById('editForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const index = document.getElementById('editRowIndex').value;
+      const updatedData = [
+        bookingsData[index][0], // ID остаётся без изменений
+        document.getElementById('editClientName').value,
+        document.getElementById('editService').value,
+        document.getElementById('editStaffMember').value,
+        document.getElementById('editDate').value,
+        document.getElementById('editTime').value,
+        document.getElementById('editStatus').value
+      ];
+
+      // Обновление данных в локальном массиве
+      bookingsData[index] = updatedData;
+
+      // Обновление таблицы
+      applyFilters();
+
+      // Закрытие модального окна
+      const editModal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+      editModal.hide();
+
+      showToast('Booking updated successfully!');
+    });
+
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+      // Проверка, загружен ли локальный CSS, если нет, загрузить Bootstrap
+      fetchSheetData();
+    });
   </script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+
